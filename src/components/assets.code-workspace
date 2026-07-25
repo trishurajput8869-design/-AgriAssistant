@@ -1,0 +1,29 @@
+{
+	"folders": [
+		{
+			"path": "../assets"
+		},
+		{
+			"path": "."
+		},
+		{
+			"path": "../data"
+		},
+		{
+			"path": "../hooks"
+		},
+		{
+			"path": "../page"
+		},
+		{
+			"path": "../services"
+		},
+		{
+			"path": "../styles"
+		},
+		{
+			"path": "../utils"
+		}
+	],
+	"settings": {}
+}
