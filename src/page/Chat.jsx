@@ -1,292 +1,396 @@
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Send,
-  ImagePlus,
   Mic,
   Leaf,
   Bot,
   User,
-  Plus,
-  Sprout,
-  CloudSun,
-  Trash2
+  Volume2
 } from "lucide-react";
-
-import { motion } from "framer-motion";
 
 
 function Chat() {
 
 
-  const [message,setMessage] = useState("");
+const [message,setMessage] = useState("");
 
-  const [image,setImage] = useState(null);
+const [messages,setMessages] = useState([
+{
+role:"assistant",
+content:
+"Namaste 🌱 Main AgriAssist AI hoon. Fasal aur kheti se jude sawal puchiye."
+}
+]);
 
-  const fileRef = useRef(null);
 
+const [voices,setVoices] = useState([]);
 
+const [listening,setListening] = useState(false);
 
-  const [messages,setMessages] = useState([
+const recognitionRef = useRef(null);
 
-    {
-      role:"ai",
-      text:"Namaste 🌱 Main AgriAssist AI hoon. Aap fasal, mitti ya farming se related sawaal puch sakte hain."
-    }
 
-  ]);
 
 
 
+// ---------------- LOAD VOICES ----------------
 
 
-  const sendMessage = async ()=>{
+useEffect(()=>{
 
 
-    if(!message.trim() && !image) return;
+const loadVoices=()=>{
 
+const allVoices =
+window.speechSynthesis.getVoices();
 
 
-    const userText = message;
+setVoices(allVoices);
 
 
+};
 
-    setMessages(prev=>[
 
-      ...prev,
+loadVoices();
 
-      {
 
-        role:"user",
+window.speechSynthesis.onvoiceschanged =
+loadVoices;
 
-        text:
-        userText || "Is fasal ki photo check karo 🌱",
 
-        image:image
 
-      }
+},[]);
 
-    ]);
 
 
 
-    setMessage("");
 
 
 
-    try{
+// ---------------- TEXT TO SPEECH ----------------
 
 
+const speakText=(text)=>{
 
-      // ==========================
-      // IMAGE REQUEST
-      // ==========================
 
+if(!text)
+return;
 
-      if(image){
 
 
-        const formData = new FormData();
+window.speechSynthesis.cancel();
 
 
 
-        const blob = await fetch(image)
-        .then(res=>res.blob());
+const utterance =
+new SpeechSynthesisUtterance(text);
 
 
 
-        formData.append(
 
-          "file",
+// Hindi best voice search
 
-          blob,
+let hindiVoice =
+voices.find(
+voice =>
+voice.lang==="hi-IN"
+);
 
-          "crop-image.jpg"
 
-        );
 
+// second priority
 
+if(!hindiVoice){
 
+hindiVoice =
+voices.find(
+voice =>
+voice.name.toLowerCase()
+.includes("hindi")
+);
 
-        const res = await fetch(
+}
 
-          "http://127.0.0.1:8000/predict",
 
-          {
 
-            method:"POST",
+// fallback Indian voice
 
-            body:formData
+if(!hindiVoice){
 
-          }
+hindiVoice =
+voices.find(
+voice =>
+voice.lang.includes("en-IN")
+);
 
-        );
+}
 
 
 
+if(hindiVoice){
 
-        const data = await res.json();
+utterance.voice =
+hindiVoice;
 
+}
 
 
 
-        setMessages(prev=>[
 
-          ...prev,
+utterance.lang="hi-IN";
 
-          {
 
-            role:"ai",
+// natural settings
 
-            text:
+utterance.rate=0.82;
 
-            data.response ||
+utterance.pitch=1.05;
 
-            data.prediction ||
+utterance.volume=1;
 
-            "Image analyze nahi ho payi 🌱"
 
-          }
 
-        ]);
+window.speechSynthesis.speak(
+utterance
+);
 
 
 
-      }
+};
 
 
 
 
 
-      // ==========================
-      // TEXT CHAT REQUEST
-      // ==========================
 
 
-      else{
 
 
-        const res = await fetch(
+// ---------------- MICROPHONE ----------------
 
-          "http://127.0.0.1:8000/chat",
 
-          {
 
-            method:"POST",
+useEffect(()=>{
 
-            headers:{
 
-              "Content-Type":"application/json"
+const SpeechRecognition =
+window.SpeechRecognition ||
+window.webkitSpeechRecognition;
 
-            },
 
 
-            body:JSON.stringify({
+if(!SpeechRecognition)
+return;
 
-              message:userText
 
-            })
 
-          }
 
-        );
+const recognition =
+new SpeechRecognition();
 
 
 
-        const data = await res.json();
+recognition.lang="hi-IN";
 
 
+recognition.continuous=false;
 
 
-        setMessages(prev=>[
+recognition.interimResults=false;
 
-          ...prev,
 
-          {
 
-            role:"ai",
+recognition.onstart=()=>{
 
-            text:
+setListening(true);
 
-            data.response ||
+};
 
-            "Kuch problem aa gayi 🌱"
 
-          }
 
-        ]);
+recognition.onend=()=>{
 
+setListening(false);
 
+};
 
-      }
 
 
 
 
-    }
+recognition.onresult=(event)=>{
 
-    catch(error){
 
+const speechText =
+event.results[0][0].transcript;
 
 
-      console.log(error);
+setMessage(speechText);
 
 
 
-      setMessages(prev=>[
+};
 
-        ...prev,
 
-        {
 
-          role:"ai",
 
-          text:
-          "Backend se connection nahi ho pa raha 🌱"
+recognitionRef.current =
+recognition;
 
-        }
 
-      ]);
 
+},[]);
 
 
-    }
 
 
 
-    setImage(null);
 
 
-  };
+const startMic=()=>{
 
 
+if(recognitionRef.current){
 
 
+recognitionRef.current.start();
 
 
+}
 
 
+};
 
-  const handleImage=(e)=>{
 
 
-    const file=e.target.files[0];
 
 
-    if(file){
 
 
-      setImage(
 
-        URL.createObjectURL(file)
+// ---------------- SEND MESSAGE ----------------
 
-      );
 
+const sendMessage=async()=>{
 
-    }
 
+if(!message.trim())
+return;
 
-  };
 
+
+
+const question=message;
+
+
+
+setMessages(prev=>[
+
+...prev,
+
+{
+role:"user",
+content:question
+}
+
+]);
+
+
+
+setMessage("");
+
+
+
+
+try{
+
+
+const response =
+await fetch(
+
+"http://127.0.0.1:8000/chat",
+
+{
+
+method:"POST",
+
+headers:{
+
+"Content-Type":
+"application/json"
+
+},
+
+
+body:JSON.stringify({
+
+message:question
+
+})
+
+}
+
+
+);
+
+
+
+const data =
+await response.json();
+
+
+
+const reply =
+data.reply ||
+data.response ||
+"Response nahi mila";
+
+
+
+
+
+setMessages(prev=>[
+
+...prev,
+
+{
+
+role:"assistant",
+
+content:reply
+
+}
+
+]);
+
+
+
+}
+
+catch(error){
+
+
+
+setMessages(prev=>[
+
+...prev,
+
+{
+
+role:"assistant",
+
+content:
+"Backend connect nahi ho pa raha hai."
+
+}
+
+]);
+
+}
+
+
+
+};
 
 
 
@@ -296,211 +400,42 @@ function Chat() {
 
 return (
 
+
 <div className="
 min-h-screen
-bg-[#050805]
+bg-black
 text-white
 flex
+flex-col
 ">
 
 
-
-
-
-{/* Sidebar */}
+{/* HEADER */}
 
 
 <div className="
-hidden md:flex
-w-72
-border-r border-white/10
-bg-black/30
 p-5
-flex-col
-">
-
-
-
-<div className="
-flex items-center gap-3 mb-10
-">
-
-
-<div className="
-w-12 h-12
-rounded-xl
-bg-green-500/20
-flex items-center justify-center
-">
-
-<Leaf className="text-green-400"/>
-
-</div>
-
-
-
-<div>
-
-<h1 className="font-bold text-xl">
-AgriAssist
-</h1>
-
-
-<p className="text-xs text-gray-400">
-AI Farming Assistant
-</p>
-
-
-</div>
-
-
-</div>
-
-
-
-
-
-<button className="
-bg-green-500
-text-black
-rounded-xl
-py-3
-font-semibold
+border-b
+border-slate-800
 flex
-gap-2
 items-center
-justify-center
-">
-
-<Plus size={18}/>
-
-New Chat
-
-</button>
-
-
-
-
-
-<div className="mt-10">
-
-
-<p className="
-text-gray-500
-text-sm
-mb-3
-">
-
-Quick Tools
-
-</p>
-
-
-
-<div className="space-y-3">
-
-
-<div className="
-bg-white/5
-p-3
-rounded-xl
-flex
 gap-3
-items-center
 ">
 
-<Sprout 
-size={18}
+
+<Leaf
 className="text-green-400"
 />
 
-Crop Analysis
 
-</div>
-
-
-
-
-<div className="
-bg-white/5
-p-3
-rounded-xl
-flex
-gap-3
-items-center
-">
-
-
-<CloudSun
-size={18}
-className="text-green-400"
-/>
-
-Weather Advice
-
-
-</div>
-
-
-</div>
-
-
-</div>
-
-
-
-</div>
-
-
-
-
-
-
-
-
-
-{/* MAIN CHAT */}
-
-
-<div className="
-flex-1
-flex
-flex-col
-">
-
-
-
-
-
-<div className="
-h-20
-border-b border-white/10
-flex
-items-center
-px-6
-">
-
-
-<div>
-
-<h2 className="
+<h1 className="
 text-xl
-font-semibold
+font-bold
 ">
 
 AgriAssist AI
 
-</h2>
-
-
-<p className="text-gray-400 text-sm">
-
-Ask anything about farming 🌱
-
-</p>
-
-
-</div>
+</h1>
 
 
 </div>
@@ -509,15 +444,14 @@ Ask anything about farming 🌱
 
 
 
-
-
+{/* CHAT AREA */}
 
 
 <div className="
 flex-1
+p-5
+space-y-4
 overflow-y-auto
-p-6
-space-y-5
 ">
 
 
@@ -526,28 +460,21 @@ space-y-5
 messages.map((msg,index)=>(
 
 
-<motion.div
+<div
 
 key={index}
-
-initial={{
-opacity:0,
-y:20
-}}
-
-animate={{
-opacity:1,
-y:0
-}}
 
 className={`
 flex gap-3
 
-${msg.role==="user"
+${
+msg.role==="user"
 ?
 "justify-end"
 :
-"justify-start"}
+"justify-start"
+
+}
 
 `}
 
@@ -555,105 +482,103 @@ ${msg.role==="user"
 
 
 
+
 {
-msg.role==="ai" &&
 
-<div className="
-w-10 h-10
-rounded-full
-bg-green-500/20
-flex
-items-center
-justify-center
-">
-
-<Bot className="text-green-400"/>
-
-</div>
-
-}
-
-
-
-
-
-<div className={`
-max-w-xl
-px-5
-py-4
-rounded-2xl
-
-
-${msg.role==="user"
+msg.role==="assistant"
 
 ?
-"bg-green-500 text-black"
+
+<Bot
+className="
+text-green-400
+"
+/>
 
 :
 
-"bg-white/10"
-
-}
-
-`}>
-
-
-
-{
-msg.image &&
-
-<img
-
-src={msg.image}
-
-className="
-rounded-xl
-mb-3
-w-48
-"
-
-/>
-
-}
-
-
-
-{msg.text}
-
-
-</div>
-
-
-
-
-
-
-{
-msg.role==="user" &&
-
-<div className="
-w-10 h-10
-rounded-full
-bg-white/10
-flex
-items-center
-justify-center
-">
-
 <User/>
 
-</div>
-
 }
 
 
 
-</motion.div>
+
+
+<div
+
+className={`
+max-w-[75%]
+px-4
+py-3
+rounded-2xl
+text-sm
+
+${
+msg.role==="assistant"
+
+?
+
+"bg-slate-800"
+
+:
+
+"bg-green-500 text-black"
+
+}
+
+`}
+
+>
+
+
+{msg.content}
+
+
+
+{
+
+msg.role==="assistant"
+
+&&
+
+
+<button
+
+onClick={()=>speakText(msg.content)}
+
+className="
+block
+mt-3
+text-green-400
+"
+
+>
+
+
+<Volume2 size={20}/>
+
+
+</button>
+
+
+}
+
+
+</div>
+
+
+
+
+</div>
+
 
 
 ))
 
+
 }
+
 
 
 </div>
@@ -670,125 +595,95 @@ justify-center
 
 
 <div className="
-p-5
+p-4
 border-t
-border-white/10
+border-slate-800
+flex
+gap-3
 ">
 
 
-{
-
-image &&
-
-<div className="mb-3 flex gap-3 items-center">
-
-
-<img
-
-src={image}
-
-className="
-w-20
-h-20
-rounded-xl
-object-cover
-"
-
-/>
-
-
 <button
-onClick={()=>setImage(null)}
+
+onClick={startMic}
+
+className={`
+w-14
+rounded-xl
+flex
+items-center
+justify-center
+
+
+${
+listening
+
+?
+
+"bg-red-500"
+
+:
+
+"bg-green-500 text-black"
+
+}
+
+`}
+
 >
 
-<Trash2 className="text-red-400"/>
+
+<Mic/>
+
 
 </button>
 
 
-</div>
 
 
+
+
+
+<input
+
+
+value={message}
+
+
+onChange={(e)=>
+setMessage(e.target.value)
 }
 
 
 
-
-
-
-
-<div className="
-flex
-gap-3
-bg-white/5
-border
-border-white/10
-rounded-2xl
-p-3
-">
-
-
-<input
-
-type="file"
-
-accept="image/*"
-
-hidden
-
-ref={fileRef}
-
-onChange={handleImage}
-
-/>
-
-
-
-
-<button
-onClick={()=>fileRef.current.click()}
->
-
-<ImagePlus className="text-green-400"/>
-
-</button>
-
-
-
-
-
-<input
-
-value={message}
-
-onChange={(e)=>setMessage(e.target.value)}
-
 onKeyDown={(e)=>{
+
 
 if(e.key==="Enter")
 sendMessage();
 
+
 }}
 
-placeholder="Fasal ke bare me pucho..."
+
+
+placeholder="Bolo ya type karo..."
+
+
 
 className="
 flex-1
-bg-transparent
+bg-slate-900
+border
+border-slate-700
+rounded-xl
+px-4
 outline-none
 "
 
 />
 
 
-
-
-
-<button>
-
-<Mic className="text-gray-400"/>
-
-</button>
 
 
 
@@ -800,26 +695,23 @@ outline-none
 onClick={sendMessage}
 
 className="
+w-14
+rounded-xl
 bg-green-500
 text-black
-p-3
-rounded-xl
+flex
+items-center
+justify-center
 "
+
 
 >
 
-<Send size={18}/>
+
+<Send/>
+
 
 </button>
-
-
-
-</div>
-
-
-
-</div>
-
 
 
 
@@ -832,6 +724,7 @@ rounded-xl
 
 
 );
+
 
 
 }
